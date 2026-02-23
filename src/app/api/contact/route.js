@@ -1,55 +1,61 @@
-import nodemailer from 'nodemailer';
-import { NextResponse } from 'next/server';
+// api/contact.js
+const nodemailer = require("nodemailer");
 
-export async function POST(req) {
+module.exports = async function handler(req, res) {
   try {
-    const { name, email, message } = await req.json();
-
-    // Validate the incoming data
-    if (!name || !email || !message) {
-      return NextResponse.json(
-        { message: 'Missing required fields' },
-        { status: 400 }
-      );
+    if (req.method !== "POST") {
+      res.statusCode = 405;
+      return res.end(JSON.stringify({ message: "Method not allowed" }));
     }
 
-    // Configure the specific email transport using the environment variables
-    const transporter = nodemailer.createTransport({
-      service: 'gmail', // You can change this if you're not using Gmail
-      auth: {
-        user: process.env.EMAIL_USER,
-        pass: process.env.EMAIL_PASS,
-      },
+    // Parse JSON body
+    let body = "";
+    req.on("data", (chunk) => {
+      body += chunk.toString();
     });
 
-    const mailOptions = {
-      from: process.env.EMAIL_USER,
-      // The email will be sent to the owner's email
-      to: 'hr319584@gmail.com',
-      // Send the email with a clear subject containing the sender's name
-      subject: `New Contact Form Submission from ${name}`,
-      text: `Name: ${name}\nEmail: ${email}\n\nMessage:\n${message}`,
-      html: `
-        <h3>New Contact Form Submission</h3>
-        <p><strong>Name:</strong> ${name}</p>
-        <p><strong>Email:</strong> ${email}</p>
-        <p><strong>Message:</strong></p>
-        <p>${message.replace(/\n/g, '<br>')}</p>
-      `,
-    };
+    req.on("end", async () => {
+      const { name, email, message } = JSON.parse(body);
 
-    // Send the email
-    await transporter.sendMail(mailOptions);
+      // Validate input
+      if (!name || !email || !message) {
+        res.statusCode = 400;
+        return res.end(JSON.stringify({ message: "Missing required fields" }));
+      }
 
-    return NextResponse.json(
-      { message: 'Email sent successfully' },
-      { status: 200 }
-    );
+      // Configure transporter
+      const transporter = nodemailer.createTransport({
+        service: "gmail",
+        auth: {
+          user: process.env.EMAIL_USER,
+          pass: process.env.EMAIL_PASS,
+        },
+      });
+
+      // Mail options
+      const mailOptions = {
+        from: process.env.EMAIL_USER,
+        to: "hr319584@gmail.com", // your email
+        subject: `New Contact Form Submission from ${name}`,
+        text: `Name: ${name}\nEmail: ${email}\n\nMessage:\n${message}`,
+        html: `
+          <h3>New Contact Form Submission</h3>
+          <p><strong>Name:</strong> ${name}</p>
+          <p><strong>Email:</strong> ${email}</p>
+          <p><strong>Message:</strong></p>
+          <p>${message.replace(/\n/g, "<br>")}</p>
+        `,
+      };
+
+      // Send email
+      await transporter.sendMail(mailOptions);
+
+      res.statusCode = 200;
+      return res.end(JSON.stringify({ message: "Email sent successfully" }));
+    });
   } catch (error) {
-    console.error('Error sending email:', error);
-    return NextResponse.json(
-      { message: 'Failed to send email' },
-      { status: 500 }
-    );
+    console.error("❌ Error sending email:", error);
+    res.statusCode = 500;
+    return res.end(JSON.stringify({ message: "Failed to send email", error: error.message }));
   }
-}
+};
