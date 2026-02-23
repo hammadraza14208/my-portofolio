@@ -1,37 +1,32 @@
-// pages/api/contact.js
-const nodemailer = require("nodemailer");
+import nodemailer from 'nodemailer';
+import { NextResponse } from 'next/server';
 
-module.exports = async function handler(req, res) {
+export async function POST(req) {
   try {
-    // Only allow POST requests
-    if (req.method !== "POST") {
-      res.setHeader("Allow", "POST");
-      res.status(405).json({ message: "Method not allowed" });
-      return;
-    }
+    const { name, email, message } = await req.json();
 
-    // Parse request body
-    const { name, email, message } = req.body;
-
-    // Validate fields
+    // Validate the incoming data
     if (!name || !email || !message) {
-      res.status(400).json({ message: "Please fill in all required fields." });
-      return;
+      return NextResponse.json(
+        { message: 'Missing required fields' },
+        { status: 400 }
+      );
     }
 
-    // Create transporter
+    // Configure the specific email transport using the environment variables
     const transporter = nodemailer.createTransport({
-      service: "gmail", // or any SMTP service
+      service: 'gmail', // You can change this if you're not using Gmail
       auth: {
         user: process.env.EMAIL_USER,
         pass: process.env.EMAIL_PASS,
       },
     });
 
-    // Email options
     const mailOptions = {
       from: process.env.EMAIL_USER,
-      to: "hr319584@gmail.com", // your email
+      // The email will be sent to the owner's email
+      to: 'hr319584@gmail.com',
+      // Send the email with a clear subject containing the sender's name
       subject: `New Contact Form Submission from ${name}`,
       text: `Name: ${name}\nEmail: ${email}\n\nMessage:\n${message}`,
       html: `
@@ -39,17 +34,32 @@ module.exports = async function handler(req, res) {
         <p><strong>Name:</strong> ${name}</p>
         <p><strong>Email:</strong> ${email}</p>
         <p><strong>Message:</strong></p>
-        <p>${message.replace(/\n/g, "<br>")}</p>
+        <p>${message.replace(/\n/g, '<br>')}</p>
       `,
     };
 
-    // Send email
-    await transporter.sendMail(mailOptions);
+    // Await the sendMail function to wrap it in a Promise.
+    // This is cruicial for Vercel serverless functions, so they don't terminate early.
+    await new Promise((resolve, reject) => {
+      transporter.sendMail(mailOptions, (err, info) => {
+        if (err) {
+          console.error('Error sending email:', err);
+          reject(err);
+        } else {
+          resolve(info);
+        }
+      });
+    });
 
-    // Success response
-    res.status(200).json({ message: "Email sent successfully!" });
+    return NextResponse.json(
+      { message: 'Email sent successfully' },
+      { status: 200 }
+    );
   } catch (error) {
-    console.error("Error sending email:", error);
-    res.status(500).json({ message: "Failed to send email", error: error.message });
+    console.error('API Route Error:', error);
+    return NextResponse.json(
+      { message: 'Failed to send email', error: error.message },
+      { status: 500 }
+    );
   }
-};
+}
